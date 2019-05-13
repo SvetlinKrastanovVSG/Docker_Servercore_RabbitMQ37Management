@@ -1,0 +1,79 @@
+pipeline {
+   agent {
+        label 'linux'
+    }
+    
+environment {
+		GITHUB_REPO = "https://github.com/jkhy/vsg_public_CDN"       
+        GITHUB_PATH = "Servercore_RabbitMQ"        
+        CONTAINER_NAME = "servercore_rabbitmq"
+        DOCKERFILE_PATH = "Dockerfile"
+        VERSION = "1.0.0"
+		DOCKER_LOCAL_DIR = "Servercore_RabbitMQ"
+        OS_TYPE = "Windows"
+        TIMEOUT_ACR = 20000
+        REGISTRY_NAME = "vsgacr"
+        RESOURCE_GROUP_NAME = "VSGACR_RG"
+        AZURE_CREDENTIALS_ID = "azure_service_principal"		
+        DEFAULT_IMAGE_NAME = "${CONTAINER_NAME}:${BRANCH_NAME.replaceAll("/", "-").toLowerCase()}"
+        //git commit - works until you start supporting base image updates, where your build system will kick off, with the same git commit as the previous built. However, the base image will have new content. Using a git commit winds up being a semi-stable tag.
+        // DEFAULT_IMAGE_NAME = "${CONTAINER_NAME}:${BRANCH_NAME_NORMALIZED}-${GIT_COMMIT.take(7)}"
+        }
+    stages {
+       stage('Start Task in ACR - Master branch') {
+            when {
+                branch 'master'
+            }
+            steps{
+                acrQuickTask azureCredentialsId:"${AZURE_CREDENTIALS_ID}", dockerfile:  "${DOCKERFILE_PATH}", gitPath: GITHUB_PATH, gitRefspec: '', gitRepo: "${GITHUB_REPO}", imageNames: [[image: "${CONTAINER_NAME}"], [image:"${CONTAINER_NAME}:${VERSION.split('\\.')[0]}.${BUILD_NUMBER}"]], os: OS_TYPE,timeout: TIMEOUT_ACR, local :DOCKER_LOCAL_DIR, registryName:"${REGISTRY_NAME}", resourceGroupName:  "${RESOURCE_GROUP_NAME}", tarball: '', variant: ''
+            }
+        }
+        stage('Start Task in ACR - Deveop branch') {
+            when {
+                branch 'develop'
+            }
+            steps{
+                acrQuickTask azureCredentialsId: "${AZURE_CREDENTIALS_ID}", dockerfile: "${DOCKERFILE_PATH}", gitPath: GITHUB_PATH, gitRefspec: '', gitRepo: "${GITHUB_REPO}", imageNames: [[image: "${DEFAULT_IMAGE_NAME}"], [image:"${CONTAINER_NAME}:${VERSION.split('\\.')[0]}.${VERSION.split('\\.')[1]}.${BUILD_NUMBER}"]], os: OS_TYPE,timeout: TIMEOUT_ACR, local :DOCKER_LOCAL_DIR, registryName: "${REGISTRY_NAME}", resourceGroupName:  "${RESOURCE_GROUP_NAME}", tarball: '', variant: ''
+            }
+        }
+        stage('Start Task in ACR - Feature branch') {
+             when { 
+                branch "feature/*" 
+             }
+            steps{
+               acrQuickTask azureCredentialsId: "${AZURE_CREDENTIALS_ID}", dockerfile: "${DOCKERFILE_PATH}", gitPath: GITHUB_PATH, gitRefspec: '', gitRepo:  "${GITHUB_REPO}", imageNames: [[image: "${DEFAULT_IMAGE_NAME}"]], local :DOCKER_LOCAL_DIR, os: OS_TYPE, timeout: TIMEOUT_ACR, registryName: "${REGISTRY_NAME}", resourceGroupName: "${RESOURCE_GROUP_NAME}", tarball: '', variant: ''
+        
+            }
+        }
+
+        
+        stage('Start Task in ACR - Release branch') {
+             when { 
+                branch "release/*" 
+             }
+            steps{
+               acrQuickTask azureCredentialsId: "${AZURE_CREDENTIALS_ID}", dockerfile: "${DOCKERFILE_PATH}", gitPath: GITHUB_PATH, gitRefspec: '', gitRepo:  "${GITHUB_REPO}", imageNames: [[image: "${CONTAINER_NAME}:RC"]], local :DOCKER_LOCAL_DIR, os: OS_TYPE, timeout: TIMEOUT_ACR,  registryName: "${REGISTRY_NAME}", resourceGroupName: "${RESOURCE_GROUP_NAME}", tarball: '', variant: ''
+        
+            }
+        }
+        
+        stage('Start Task in ACR - Hotfix branch') {
+             when { 
+                branch "hotfix/*" 
+             }
+            steps{
+               acrQuickTask azureCredentialsId: "${AZURE_CREDENTIALS_ID}", dockerfile: "${DOCKERFILE_PATH}", gitPath: GITHUB_PATH, gitRefspec: '', gitRepo:  "${GITHUB_REPO}", imageNames: [[image: "${DEFAULT_IMAGE_NAME}"]], local :DOCKER_LOCAL_DIR, os: OS_TYPE, timeout: TIMEOUT_ACR,  registryName: "${REGISTRY_NAME}", resourceGroupName: "${RESOURCE_GROUP_NAME}", tarball: '', variant: ''
+        
+            }
+        }
+        stage('Start Task in ACR - Pull Request') {
+             when { 
+                branch "PR-*" 
+             }
+            steps{
+                  acrQuickTask azureCredentialsId: "${AZURE_CREDENTIALS_ID}", dockerfile: "${DOCKERFILE_PATH}", gitPath: GITHUB_PATH, gitRefspec: '', gitRepo:  "${GITHUB_REPO}", imageNames: [[image: "${DEFAULT_IMAGE_NAME}"]], local :DOCKER_LOCAL_DIR, os: OS_TYPE, timeout: TIMEOUT_ACR, registryName: "${REGISTRY_NAME}", resourceGroupName: "${RESOURCE_GROUP_NAME}", tarball: '', variant: ''
+        
+            }
+        }
+    }
+}
